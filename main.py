@@ -1,19 +1,20 @@
 import asyncio
 import logging
+import json
 
 from aiogram import Bot, Dispatcher, html,F, types
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart
 from aiogram.types import ContentType
-from aiogram.types import Message ,CallbackQuery
+from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
 from config import token
 from defoult_buttons import sahifa,accept,accept1,user_sahifa,contact,location
-from inline_buttons import accept_user,accept_admin
+from inline_buttons import accept_user
 from states import Form_Cate,Form_Pro,From_User
-from database import categoryAdd,categoryRead,productAdd,productRead
-from aiogram.utils.keyboard import ReplyKeyboardBuilder,InlineKeyboardBuilder,InlineKeyboardButton,InlineKeyboardMarkup
+from database import categoryAdd,categoryRead,productAdd,productRead,basketInsert,basketDelete,basketRead
+from aiogram.utils.keyboard import ReplyKeyboardBuilder,InlineKeyboardButton,InlineKeyboardMarkup
 
 
 TOKEN =token
@@ -29,6 +30,7 @@ async def command_start_handler(message: Message) -> None:
         await message.answer("Xush kelibsiz admin. ",reply_markup=sahifa)
     else:
         await message.answer_photo(photo="https://avatars.mds.yandex.net/i?id=cbb4cc0e6f5af2d07ac5517943d2d7419d010b13-10303576-images-thumbs&n=13",caption=f"Assalomu alaykum, {message.from_user.full_name}\nBizni online marketga xush kelibsiz",reply_markup=user_sahifa)
+
 
 @dp.message(F.text == "category_add", F.from_user.id == 5072268247)
 async def ProductAddbot(message: Message, state: FSMContext):
@@ -148,6 +150,16 @@ async def ProductAddbot(message: Message, state: FSMContext):
     await message.answer("Category birini tanlang.",reply_markup=builder.as_markup(resize_keyboard=True))
     await state.set_state(From_User.product_name_user)  
 
+@dp.message(F.text == "basket")
+async def BasketRead(message: Message):
+    user_id = message.from_user.id
+    basket = basketRead(user_id=user_id)
+    if basket:
+        j=0
+        for i in basket:
+            j+=1
+            await bot.send_message(user_id,text=f"{j}-mahsulotingiz: {i[3]} ta {i[2]}\n")
+
 @dp.message(F.text, From_User.product_name_user)
 async def ProductAddbot(message: Message, state: FSMContext):
     user_id = message.from_user.id
@@ -238,23 +250,32 @@ async def ContactBot(message: Message, state: FSMContext):
     await state.set_state(From_User.product_accept_user)
 
 
-@dp.callback_query(F.data=="ha",From_User.product_accept_user)
+@dp.callback_query(F.data == "ha", From_User.product_accept_user)
 async def process_callback(call: types.CallbackQuery, state: FSMContext):
     await call.message.reply("Buyurtma adminga yuborildi,iltimos admin javobini kuting!")
     data = await state.get_data()
     product_count = data.get("product_count")
     contact = data.get('contact')
-    product_name= data.get("product_name")
+    product_name = data.get("product_name")
     category_name = data.get("Category_name")
-    latitude=data.get('latitude')
-    longitude=data.get('longitude')
-    user_id =call.message.from_user.id
-    await bot.send_message('5072268247',"YANGI BUYURTMA!!!")
-    await bot.send_location("5072268247",latitude=latitude, longitude=longitude)
-    await bot.send_message("5072268247",f"{call.message.from_user.full_name} ismli mijoz,\ncategory: {category_name},\nproduct_name: {product_name},\nproduct_count: {product_count} ta\ncontact: {contact},\nid: {user_id}\nBuyurtmani qabul qilamizmi?",reply_markup=accept_admin)
+    latitude = data.get('latitude')
+    longitude = data.get('longitude')
+    user_id = call.from_user.id
+    dataObj = {
+        'user_id': user_id
+    }
+    await bot.send_message('5072268247', "YANGI BUYURTMA!!!")
+    await bot.send_location("5072268247", latitude=latitude, longitude=longitude)
+    await bot.send_message("5072268247",
+                           f"{call.message.from_user.full_name} ismli mijoz,\ncategory: {category_name},\nproduct_name: {product_name},\nproduct_count: {product_count} ta\ncontact: {contact},\nid: {user_id}\nBuyurtmani qabul qilamizmi?",
+                           reply_markup=InlineKeyboardMarkup(
+                               inline_keyboard=[
+                                   [InlineKeyboardButton(text="albatta",callback_data=f"albatta: {json.dumps(dataObj)}"), InlineKeyboardButton(text=f"kerak emas", callback_data=f"kerak_emas: {json.dumps(dataObj)}")]
+                               ]
+                           ))
+    basketInsert(category_name,product_name,product_count,user_id)
     # await state.set_state(From_User.admin_state)
-    a=await state.get_state()
-    print(a)
+
 
 
 
@@ -263,19 +284,26 @@ async def process_callback2(call: types.CallbackQuery, state: FSMContext):
     await call.message.answer("buyurtma bekor qilinda",reply_markup=user_sahifa)
     await state.clear()
 
-@dp.callback_query(F.data == "albatta")
-async def admin_accept_bot(call:types.CallbackQuery,state: FSMContext):
-    print("ishladi")
-    data = await state.get_data()
-    user_id = call.message.from_user.id
-    print("zo'r ishladi")
-    print(user_id)
-    await bot.send_message("6234035139",text="Zakas yo'lga chiqdi")
-    print(call.message.text)
+@dp.callback_query(F.data.startswith("kerak_emas:"))
+async def admin_accept_bot(call: types.CallbackQuery, state: FSMContext):
+    print(" kerak emas ishladi")
+    data = json.loads(call.data.split("kerak_emas:")[1])
+    print('data', data)
+    user_id = data['user_id']
+    await bot.send_message(user_id, text="Zakas bekor qilindi!!!")
+    basketDelete(user_id)
 
-# @dp.callback_query(F.data == "albatta",F.from_user.id == 5072268247 )
-# async def albatta_bot(call: types.CallbackQuery):
-    
+@dp.callback_query(F.data.startswith("albatta:"))
+async def admin_accept_bot(call: types.CallbackQuery, state: FSMContext):
+    print("ishladi")
+    data = json.loads(call.data.split("albatta:")[1])
+    print("zo'r ishladi")
+    print('data', data)
+    user_id = data['user_id']
+    await bot.send_message(user_id, text="Zakas yo'lga chiqdi",reply_markup=user_sahifa)
+
+
+
 
 
 @dp.callback_query()

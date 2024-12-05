@@ -1,5 +1,68 @@
 import sqlite3
 
+def basketRead(user_id):
+    try:
+        con = sqlite3.connect("online_market.db")
+        cursor = con.cursor()
+        cursor.execute(f"""select * from basket where user_id = {user_id}""")
+        a = cursor.fetchall()
+        cursor.close()
+        return a 
+    except(Exception, sqlite3.Error)as error:
+        print("error",error)
+    finally:
+        if con:
+            con.close()
+
+def basketDelete(user_id):
+    try :
+        con = sqlite3.connect("online_market.db")
+        cursor = con.cursor()
+        cursor.execute(f"DELETE FROM basket WHERE user_id = {user_id}")
+        con.commit()
+    except(Exception,sqlite3.Error) as error:
+        print(error)
+    finally:
+        if con:
+            cursor.close()
+            con.close()
+            print("yangi qator qo'shildi.")
+
+
+def basketInsert(category, name, count, user_id):
+    try:
+        con = sqlite3.connect("online_market.db")
+        cursor = con.cursor()
+        cursor.execute("""insert into basket(category,name,count,user_id) values(?,?,?,?)""",(category,name,count,user_id))
+        con.commit()
+        cursor.close()
+    except(Exception,sqlite3.Error) as error:
+        print(error)
+    finally:
+        if con:
+            con.close()
+            print("yangi qator qo'shildi.")
+
+# try : 
+#     con = sqlite3.connect("online_market.db")
+#     cursor = con.cursor()
+#     cursor.execute("""create table basket(
+#                    id integer primary key not null,
+#                    category text not null,
+#                    name text not null,
+#                    count integer not null,
+#                    user_id integer not null
+#     )""")
+# except(Exception,sqlite3.Error) as error:
+#         print("error",error)
+# finally:
+#         if con:
+#             con.close()
+#         print("malumot qo'shildi")
+
+
+
+
 def productRead(category):
     try:
         con = sqlite3.connect("online_market.db")
